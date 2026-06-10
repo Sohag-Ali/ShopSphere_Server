@@ -100,9 +100,11 @@ async function run() {
     const usersCollection = db.collection('users');
     const productsCollection = db.collection('products');
     const  categoriesCollection = db.collection('categories');
-    const ordersCollection = db.collection('orders');
-    const reviewsCollection = db.collection('reviews');
+    const orderCollection = db.collection('orders');
+    const reviewCollection =db.collection("reviews");
     const blogsCollection = db.collection('blogs');
+    const cartCollection = db.collection("cart");
+    const wishlistCollection = db.collection("wishlist");
 
 
 
@@ -150,39 +152,25 @@ async function run() {
       user.role = 'user';
       user.isPremium = false;
       user.isBanned = false;
+      user.phone = "";
+      user.address = "";
+      user.city = "";
+      user.postalCode = "";
       user.createdAt = new Date();
       const result = await usersCollection.insertOne(user);
       res.send(result);
     });
 
-// ...API endpoint to get all users, only for admin
-    app.get('/users', async(req, res) => {
+// ...............................API endpoint to get all users, only for admin
+ app.get("/users", async (req, res) => {
 
-   const users =
-   await usersCollection.find().toArray();
+  const result =
+    await usersCollection
+      .find()
+      .toArray();
 
-   // add total lessons count
-   const usersWithLessons =
-   await Promise.all(
+  res.send(result);
 
-      users.map(async(user) => {
-
-         const totalLessons =
-         await lessonsCollection.countDocuments({
-
-            creatorEmail: user.email
-         });
-
-         return {
-
-            ...user,
-
-            totalLessons
-         };
-      })
-   );
-
-   res.send(usersWithLessons);
 });
 
 //socailLogin check and create user if not exists
@@ -203,8 +191,8 @@ app.get('/users/email/:email', async(req, res) => {
 
 app.patch(
   '/users/admin/:id',
-  verifyFirebaseToken,
-  verifyAdmin,
+  // verifyFirebaseToken,
+  // verifyAdmin,
 
   async (req, res) => {
 
@@ -228,19 +216,7 @@ app.patch(
       }
     );
 
-    // activity log
-    await adminActivitiesCollection.insertOne({
-
-      adminEmail: req.decoded.email,
-
-      action: "Made Admin",
-
-      targetUserEmail: targetUser?.email,
-
-      targetUserName: targetUser?.name,
-
-      timestamp: new Date()
-    });
+    
 
     // send updated user
     const updatedUser = await usersCollection.findOne({
@@ -259,9 +235,9 @@ app.delete(
 
    '/users/:id',
 
-   verifyFirebaseToken,
+  //  verifyFirebaseToken,
 
-   verifyAdmin,
+  //  verifyAdmin,
 
    async(req, res) => {
 
@@ -282,26 +258,117 @@ app.delete(
          _id: new ObjectId(id)
       });
 
-      // save admin activity
-      await adminActivitiesCollection.insertOne({
-
-         adminEmail:
-         req.decoded.email,
-
-         action: "Deleted User",
-
-         deletedUserEmail:
-         user?.email,
-
-         deletedUserName:
-         user?.name,
-
-         timestamp: new Date()
-      });
+      
 
       res.send(result);
 });
 
+app.get(
+  "/users/profile/:email",
+  async (req, res) => {
+
+    const email =
+      req.params.email;
+
+    const result =
+      await usersCollection.findOne({
+        email
+      });
+
+    res.send(result);
+
+});
+
+app.patch(
+  "/users/profile/:email",
+  async (req, res) => {
+
+    const email =
+      req.params.email;
+
+    const updatedData =
+      req.body;
+
+    const result =
+      await usersCollection.updateOne(
+        {
+          email
+        },
+        {
+          $set: {
+
+            name:
+              updatedData.name,
+
+            phone:
+              updatedData.phone,
+
+            address:
+              updatedData.address,
+
+            city:
+              updatedData.city,
+
+            postalCode:
+              updatedData.postalCode,
+
+            photoURL:
+              updatedData.photoURL,
+
+          }
+        }
+      );
+
+    res.send(result);
+
+});
+
+app.get(
+  "/profile-stats/:email",
+  async (req, res) => {
+
+    const email =
+      req.params.email;
+
+    const totalOrders =
+      await orderCollection.countDocuments({
+        userEmail: email
+      });
+
+    const totalWishlist =
+      await wishlistCollection.countDocuments({
+        userEmail: email
+      });
+
+    const totalReviews =
+      await reviewCollection.countDocuments({
+        customerEmail: email
+      });
+
+    const recentOrders =
+      await orderCollection
+        .find({
+          userEmail: email
+        })
+        .sort({
+          orderDate: -1
+        })
+        .limit(5)
+        .toArray();
+
+    res.send({
+
+      totalOrders,
+
+      totalWishlist,
+
+      totalReviews,
+
+      recentOrders,
+
+    });
+
+});
 
 //.................................product fe  ature API endpoints..............................
 app.get("/featured-products", async (req, res) => {
@@ -402,7 +469,7 @@ app.get("/statistics", async (req, res) => {
 app.get("/reviews", async (req, res) => {
   try {
 
-    const result = await reviewsCollection
+    const result = await reviewCollection
       .find()
       .sort({ createdAt: -1 })
       .limit(6)
@@ -456,16 +523,16 @@ app.get("/products/:id", async (req, res) => {
 
 //............................product reviews.............................
 
-app.get("/reviews/:productId", async (req, res) => {
+// app.get("/reviews/:productId", async (req, res) => {
 
-  const result = await reviewsCollection
-    .find({
-      productId: req.params.productId,
-    })
-    .toArray();
+//   const result = await reviewsCollection
+//     .find({
+//       productId: req.params.productId,
+//     })
+//     .toArray();
 
-  res.send(result);
-});
+//   res.send(result);
+// });
 
 //..........................related products.............................
 
@@ -543,6 +610,129 @@ app.get("/products", async (req, res) => {
   });
 });
 
+//.........................dashboadrd user orders.............................
+
+app.get("/my-orders/:email", async (req, res) => {
+
+  const email = req.params.email;
+
+  const result =
+    await orderCollection
+      .find({
+        userEmail: email
+      })
+      .toArray();
+
+  res.send(result);
+
+});
+
+//............................overview user profile.............................
+app.get("/user-overview/:email", async (req, res) => {
+
+  const email = req.params.email;
+
+  const totalOrders =
+    await orderCollection.countDocuments({
+      userEmail: email,
+    });
+
+  const totalWishlist =
+    await wishlistCollection.countDocuments({
+      userEmail: email,
+    });
+
+  const totalReviews =
+    await reviewCollection.countDocuments({
+      customerEmail: email,
+    });
+
+  const recentOrders =
+    await orderCollection
+      .find({
+        userEmail: email,
+      })
+      .sort({ orderDate: -1 })
+      .limit(5)
+      .toArray();
+
+  res.send({
+    totalOrders,
+    totalWishlist,
+    totalReviews,
+    accountStatus: "Active",
+    recentOrders,
+  });
+
+});
+
+//.............................wishlist API endpoints.............................
+
+app.post("/wishlist", async (req, res) => {
+
+  const wishlistItem = req.body;
+
+  const exists =
+    await wishlistCollection.findOne({
+      userEmail: wishlistItem.userEmail,
+      productId: wishlistItem.productId,
+    });
+
+  if (exists) {
+
+    return res.send({
+      inserted: false,
+      message:
+        "Already Added",
+    });
+
+  }
+
+  const result =
+    await wishlistCollection.insertOne(
+      wishlistItem
+    );
+
+  res.send(result);
+
+});
+
+
+//.......................get wishlist items.............................
+
+app.get("/wishlist/:email", async (req, res) => {
+
+  const email =
+    req.params.email;
+
+  const result =
+    await wishlistCollection
+      .find({
+        userEmail: email,
+      })
+      .toArray();
+
+  res.send(result);
+
+});
+
+//......................delete wishlist item.............................
+
+app.delete("/wishlist/:id", async (req, res) => {
+
+  const id =
+    req.params.id;
+
+  const result =
+    await wishlistCollection.deleteOne({
+      _id: new ObjectId(id),
+    });
+
+  res.send(result);
+
+});
+
+
 
 
 
@@ -579,6 +769,790 @@ app.patch('/users/profile/:email', async(req, res) => {
    res.send(result);
 });
 
+//..........................my reviews API endpoints.............................
+app.get("/my-reviews/:email", async (req, res) => {
+
+  const email = req.params.email;
+
+  const result =
+    await reviewCollection
+      .find({
+        customerEmail: email
+      })
+      .sort({
+        createdAt: -1
+      })
+      .toArray();
+
+  res.send(result);
+
+});
+
+//................delete review API endpoint.............................
+
+app.delete("/reviews/:id", async (req, res) => {
+
+  const id = req.params.id;
+
+  const result =
+    await reviewCollection.deleteOne({
+      _id: new ObjectId(id)
+    });
+
+  res.send(result);
+
+});
+
+
+//..........................admin dashboard API endpoints.............................
+
+app.get("/admin-overview", async (req, res) => {
+  try {
+
+    const totalProducts =
+      await productsCollection.countDocuments();
+
+    const totalUsers =
+      await usersCollection.countDocuments();
+
+    const totalOrders =
+      await ordersCollection.countDocuments();
+
+    const totalCategories =
+      await categoriesCollection.countDocuments();
+
+    const recentOrders =
+      await ordersCollection
+        .find()
+        .sort({ orderDate: -1 })
+        .limit(5)
+        .toArray();
+
+    res.send({
+      totalProducts,
+      totalUsers,
+      totalOrders,
+      totalCategories,
+      recentOrders,
+    });
+
+  } catch (error) {
+
+    console.log(error);
+
+    res.status(500).send({
+      message: "Failed to load dashboard"
+    });
+
+  }
+});
+//..............................ad product API endpoint.............................
+
+app.post("/products", async (req, res) => {
+  try {
+
+    const product = req.body;
+
+    const result =
+      await productsCollection.insertOne(
+        product
+      );
+
+    res.send({
+      insertedId:
+        result.insertedId,
+      success: true,
+    });
+
+  } catch (error) {
+
+    console.log(error);
+
+    res.status(500).send({
+      success: false,
+      message:
+        "Failed to add product",
+    });
+
+  }
+});
+
+//.........................grt single product API endpoint.............................
+
+app.get("/products/:id", async (req, res) => {
+
+  try {
+
+    const id =
+      req.params.id;
+
+    const result =
+      await productsCollection.findOne({
+        _id:
+          new ObjectId(id)
+      });
+
+    res.send(result);
+
+  } catch (error) {
+
+    console.log(error);
+
+    res.status(500).send({
+      message:
+        "Failed to fetch product"
+    });
+
+  }
+
+});
+
+//.......................delete product API endpoint.............................
+
+app.delete("/products/:id", async (req, res) => {
+
+  try {
+
+    const id =
+      req.params.id;
+
+    const result =
+      await productsCollection.deleteOne({
+        _id:
+          new ObjectId(id)
+      });
+
+    res.send(result);
+
+  } catch (error) {
+
+    console.log(error);
+
+    res.status(500).send({
+      message:
+        "Failed to delete product"
+    });
+
+  }
+
+});
+
+//...........................make deal API endpoint.............................
+
+app.patch("/products/deal/:id", async (req, res) => {
+
+  try {
+
+    const id =
+      req.params.id;
+
+    const {
+      discountPrice
+    } = req.body;
+
+    const result =
+      await productsCollection.updateOne(
+
+        {
+          _id:
+            new ObjectId(id)
+        },
+
+        {
+          $set: {
+
+            isDeal: true,
+
+            discountPrice:
+              Number(
+                discountPrice
+              )
+
+          }
+        }
+
+      );
+
+    res.send(result);
+
+  } catch (error) {
+
+    console.log(error);
+
+    res.status(500).send({
+      message:
+        "Failed to make deal"
+    });
+
+  }
+
+});
+
+//................................remove deal API endpoint.............................
+
+app.patch("/products/remove-deal/:id", async (req, res) => {
+
+  try {
+
+    const id =
+      req.params.id;
+
+    const result =
+      await productsCollection.updateOne(
+
+        {
+          _id:
+            new ObjectId(id)
+        },
+
+        {
+          $set: {
+            isDeal: false
+          },
+
+          $unset: {
+            discountPrice: ""
+          }
+        }
+
+      );
+
+    res.send(result);
+
+  } catch (error) {
+
+    console.log(error);
+
+    res.status(500).send({
+      message:
+        "Failed to remove deal"
+    });
+
+  }
+
+});
+
+//.............................update product API endpoint.............................
+
+app.patch("/products/:id", async (req, res) => {
+
+  try {
+
+    const id =
+      req.params.id;
+
+    const updatedData =
+      req.body;
+
+    const result =
+      await productsCollection.updateOne(
+
+        {
+          _id:
+            new ObjectId(id)
+        },
+
+        {
+          $set:
+            updatedData
+        }
+
+      );
+
+    res.send(result);
+
+  } catch (error) {
+
+    console.log(error);
+
+    res.status(500).send({
+      message:
+        "Failed to update product"
+    });
+
+  }
+
+});
+
+//............................admin get products API endpoint.............................
+app.get("/admin/products", async (req, res) => {
+
+  try {
+
+    const result =
+      await productsCollection
+        .find()
+        .sort({
+          createdAt: -1
+        })
+        .toArray();
+
+    res.send(result);
+
+  } catch (error) {
+
+    console.log(error);
+
+    res.status(500).send({
+      message:
+        "Failed to fetch products"
+    });
+
+  }
+
+});
+
+//............................. Get all categories API endpoint.............................
+
+// app.get("/categories", async (req, res) => {
+
+//   const result =
+//     await categoriesCollection
+//       .find()
+//       .toArray();
+
+//   res.send(result);
+
+// });
+
+//............................. Add category API endpoint.............................
+app.post("/categories", async (req, res) => {
+
+  const category =
+    req.body;
+
+  const result =
+    await categoriesCollection.insertOne(
+      category
+    );
+
+  res.send(result);
+
+});
+
+//............................update category API endpoint.............................
+
+app.patch("/categories/:id", async (req, res) => {
+
+  const id =
+    req.params.id;
+
+  const updatedData =
+    req.body;
+
+  const result =
+    await categoriesCollection.updateOne(
+
+      {
+        _id:
+          new ObjectId(id)
+      },
+
+      {
+        $set:
+          updatedData
+      }
+
+    );
+
+  res.send(result);
+
+});
+
+//............................delete category API endpoint.............................
+
+app.delete("/categories/:id", async (req, res) => {
+
+  const id =
+    req.params.id;
+
+  const result =
+    await categoriesCollection.deleteOne({
+      _id:
+        new ObjectId(id)
+    });
+
+  res.send(result);
+
+});
+
+//........................get order API endpoint.............................
+
+
+app.get("/orders", async (req, res) => {
+
+  const result =
+    await orderCollection
+      .find()
+      .sort({
+        orderDate: -1
+      })
+      .toArray();
+
+  res.send(result);
+
+});
+
+//...............................update order status API endpoint.............................
+
+
+app.patch("/orders/:id", async (req, res) => {
+
+  const id =
+    req.params.id;
+
+  const { status } =
+    req.body;
+
+  const result =
+    await orderCollection.updateOne(
+
+      {
+        _id:
+          new ObjectId(id)
+      },
+
+      {
+        $set: {
+          status
+        }
+      }
+
+    );
+
+  res.send(result);
+
+});
+
+//..........................delete order API endpoint.............................
+
+app.delete("/orders/:id", async (req, res) => {
+
+  const id =
+    req.params.id;
+
+  const result =
+    await orderCollection.deleteOne({
+      _id:
+        new ObjectId(id)
+    });
+
+  res.send(result);
+
+});
+
+//.............................get all revirews API endpoint.............................
+
+app.get("/admin/reviews", async (req, res) => {
+
+  const result =
+    await reviewsCollection
+      .find()
+      .sort({
+        createdAt: -1
+      })
+      .toArray();
+
+  res.send(result);
+
+});
+
+//..............................delete review API endpoint.............................
+
+// app.delete("/reviews/:id", async (req, res) => {
+
+//   const id =
+//     req.params.id;
+
+//   const result =
+//     await reviewsCollection.deleteOne({
+//       _id:
+//         new ObjectId(id)
+//     });
+
+//   res.send(result);
+
+// });
+
+//............................cart API endpoints.............................
+
+app.post("/cart", async (req, res) => {
+  try {
+    const cartItem = req.body;
+
+    const existing =
+      await cartCollection.findOne({
+        userEmail: cartItem.userEmail,
+        productId: cartItem.productId,
+      });
+
+    if (existing) {
+      return res.send({
+        inserted: false,
+        message: "Already Added",
+      });
+    }
+
+    const result =
+      await cartCollection.insertOne(cartItem);
+
+    res.send(result);
+
+  } catch (error) {
+    res.status(500).send({
+      message: "Failed to add cart",
+    });
+  }
+});
+
+//........................get cart items API endpoint.............................
+
+app.get("/cart/:email", async (req, res) => {
+  try {
+    const result =
+      await cartCollection
+        .find({
+          userEmail: req.params.email,
+        })
+        .toArray();
+
+    res.send(result);
+
+  } catch (error) {
+    res.status(500).send({
+      message: "Failed to fetch cart",
+    });
+  }
+});
+
+//........................delete cart item API endpoint.............................
+
+app.delete("/cart/:id", async (req, res) => {
+  const result =
+    await cartCollection.deleteOne({
+      _id: new ObjectId(req.params.id),
+    });
+
+  res.send(result);
+});
+
+//.......................increment cart item quantity API endpoint.............................
+
+app.patch("/cart/increase/:id", async (req, res) => {
+  const id = req.params.id;
+
+  const result = await cartCollection.updateOne(
+    {
+      _id: new ObjectId(id),
+    },
+    {
+      $inc: {
+        quantity: 1,
+      },
+    }
+  );
+
+  res.send(result);
+});
+
+//.......................decrement cart item quantity API endpoint.............................
+
+app.patch("/cart/decrease/:id", async (req, res) => {
+  const id = req.params.id;
+
+  const item =
+    await cartCollection.findOne({
+      _id: new ObjectId(id),
+    });
+
+  if (item.quantity <= 1) {
+    return res.send({
+      message: "Minimum quantity reached",
+    });
+  }
+
+  const result = await cartCollection.updateOne(
+    {
+      _id: new ObjectId(id),
+    },
+    {
+      $inc: {
+        quantity: -1,
+      },
+    }
+  );
+
+  res.send(result);
+});
+
+//.........................post wishlist API endpoint.............................
+
+app.post("/wishlist", async (req, res) => {
+
+  const wishlistItem = req.body;
+
+  const exists =
+    await wishlistCollection.findOne({
+      userEmail: wishlistItem.userEmail,
+      productId: wishlistItem.productId,
+    });
+
+  if (exists) {
+    return res.send({
+      inserted: false,
+      message: "Already Added",
+    });
+  }
+
+  const result =
+    await wishlistCollection.insertOne(
+      wishlistItem
+    );
+
+  res.send(result);
+});
+
+//........................review API endpoint.............................
+
+app.post("/reviews", async (req, res) => {
+  try {
+    const review = req.body;
+
+    const result =
+      await reviewCollection.insertOne(review);
+
+    res.send(result);
+
+  } catch (error) {
+    console.log(error);
+    res.status(500).send(error);
+  }
+});
+
+app.get("/reviews/:productId", async (req, res) => {
+  try {
+
+    const productId =
+      req.params.productId;
+
+    const result =
+      await reviewCollection
+        .find({ productId })
+        .sort({ createdAt: -1 })
+        .toArray();
+
+    res.send(result);
+
+  } catch (error) {
+    console.log(error);
+    res.status(500).send(error);
+  }
+});
+
+app.post(
+  "/save-order/:sessionId",
+  async (req, res) => {
+
+    try {
+
+      const session =
+        await stripe.checkout.sessions.retrieve(
+          req.params.sessionId
+        );
+
+      // Duplicate Check
+
+      const existingOrder =
+        await orderCollection.findOne({
+          sessionId: session.id,
+        });
+
+      if (existingOrder) {
+
+        return res.send({
+          message:
+            "Order Already Saved",
+        });
+
+      }
+
+      const {
+        userEmail,
+        productId,
+        productTitle,
+        productImage,
+        price,
+        quantity,
+      } = session.metadata;
+
+      const quantityNumber =
+        Number(quantity);
+
+      const orderData = {
+
+        sessionId:
+          session.id,
+
+        userEmail,
+
+        productId,
+
+        productTitle,
+
+        productImage,
+
+        price:
+          Number(price),
+
+        quantity:
+          quantityNumber,
+
+        totalPrice:
+          Number(price) *
+          quantityNumber,
+
+        status:
+          "Processing",
+
+        orderDate:
+          new Date(),
+
+      };
+
+      const result =
+        await orderCollection.insertOne(
+          orderData
+        );
+
+      await productsCollection.updateOne(
+        {
+          _id:
+            new ObjectId(
+              productId
+            ),
+        },
+        {
+          $inc: {
+            stock:
+              -quantityNumber,
+          },
+        }
+      );
+
+      res.send(result);
+
+    } catch (error) {
+
+      console.log(error);
+
+      res.status(500).send({
+        message:
+          "Failed To Save Order",
+      });
+
+    }
+
+});
 
 
 
@@ -589,6 +1563,76 @@ app.patch('/users/profile/:email', async(req, res) => {
 
 
 
+
+    // Payment related API endpoints can be added here, for example:
+
+    //Stipe checkout session create API
+    app.post('/create-checkout-session', async (req, res) => {
+      try {
+
+      const paymentInfo = req.body;
+
+      const session = await stripe.checkout.sessions.create({
+
+         line_items: [
+            {
+               price_data: {
+
+                  currency: 'bdt',
+
+                  unit_amount:  paymentInfo.price * 100,
+
+                  product_data: {
+                     name:
+                  paymentInfo.productTitle,
+                  },
+               },
+
+               quantity:  paymentInfo.quantity,
+            },
+         ],
+
+         mode: 'payment',
+
+         metadata: {
+            userEmail:
+            paymentInfo.email,
+
+          productId:
+            paymentInfo.productId,
+
+          productTitle:
+            paymentInfo.productTitle,
+
+          productImage:
+            paymentInfo.productImage,
+
+          price:
+            paymentInfo.price.toString(),
+
+          quantity:
+            paymentInfo.quantity.toString(),
+
+        },
+
+         success_url: `${process.env.SITE_DOMAIN}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+
+         cancel_url: `${process.env.SITE_DOMAIN}/payment-cancel`,
+      });
+
+      console.log(session.url);
+
+      res.send({ url: session.url });
+
+   } catch(error){
+
+      console.log(error);
+
+      res.status(500).send({
+         error: error.message
+      });
+   }
+});
 
 
 
