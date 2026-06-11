@@ -463,7 +463,7 @@ app.get("/special-deals", async (req, res) => {
 
     const result = await productsCollection
       .find({ isDeal: true })
-      .limit(8)
+      // .limit(8)
       .toArray();
 
     res.send(result);
@@ -602,6 +602,7 @@ app.get("/products", async (req, res) => {
     search = "",
     category = "",
     sort = "",
+    deal = "",
     page = 1,
     limit = 8,
   } = req.query;
@@ -617,6 +618,10 @@ app.get("/products", async (req, res) => {
 
   if (category) {
     query.category = category;
+  }
+
+  if (deal === "true") {
+    query.isDeal = true;
   }
 
   let sortOption = {};
@@ -1322,6 +1327,7 @@ app.get("/admin/reviews", async (req, res) => {
 
 app.post("/cart", async (req, res) => {
   try {
+
     const cartItem = req.body;
 
     const existing =
@@ -1331,24 +1337,47 @@ app.post("/cart", async (req, res) => {
       });
 
     if (existing) {
+
+      const updateResult =
+        await cartCollection.updateOne(
+          {
+            userEmail:
+              cartItem.userEmail,
+            productId:
+              cartItem.productId,
+          },
+          {
+            $inc: {
+              quantity:
+                cartItem.quantity,
+            },
+          }
+        );
+
       return res.send({
-        inserted: false,
-        message: "Already Added",
+        updated: true,
+        modifiedCount:
+          updateResult.modifiedCount,
       });
+
     }
 
     const result =
-      await cartCollection.insertOne(cartItem);
+      await cartCollection.insertOne(
+        cartItem
+      );
 
     res.send(result);
 
   } catch (error) {
+
     res.status(500).send({
-      message: "Failed to add cart",
+      message:
+        "Failed to add cart",
     });
+
   }
 });
-
 //........................get cart items API endpoint.............................
 
 app.get("/cart/:email", async (req, res) => {
@@ -1607,8 +1636,6 @@ app.post(
           req.params.sessionId
         );
 
-      // Duplicate Check
-
       const existingOrder =
         await orderCollection.findOne({
           sessionId: session.id,
@@ -1623,14 +1650,120 @@ app.post(
 
       }
 
+      const checkoutType =
+        session.metadata.checkoutType;
+
+      // CART CHECKOUT
+      if (
+        checkoutType === "cart"
+      ) {
+
+        const cartItems =
+          await cartCollection
+            .find({
+
+              userEmail:
+                session.metadata.userEmail,
+
+            })
+            .toArray();
+
+        for (const item of cartItems) {
+
+          await orderCollection.insertOne({
+
+            sessionId:
+              session.id,
+
+            userEmail:
+              session.metadata.userEmail,
+
+            userName:
+              session.metadata.userName,
+
+            productId:
+              item.productId,
+
+            productTitle:
+              item.title,
+
+            productImage:
+              item.image,
+
+            quantity:
+              item.quantity,
+
+            price:
+              item.price,
+
+            totalPrice:
+              item.price *
+              item.quantity,
+
+            status:
+              "pending",
+
+            orderDate:
+              new Date(),
+
+          });
+
+          await productsCollection.updateOne(
+
+            {
+              _id:
+                new ObjectId(
+                  item.productId
+                ),
+            },
+
+            {
+              $inc: {
+                stock:
+                  -item.quantity,
+              },
+            }
+
+          );
+
+        }
+
+        await cartCollection.deleteMany({
+
+          userEmail:
+            session.metadata.userEmail,
+
+        });
+
+        return res.send({
+
+          success: true,
+
+          message:
+            "Cart Order Saved",
+
+        });
+
+      }
+
+      // BUY NOW CHECKOUT
+
       const {
+
         userEmail,
+
         userName,
+
         productId,
+
         productTitle,
+
         productImage,
+
         price,
+
         quantity,
+
       } = session.metadata;
 
       const quantityNumber =
@@ -1642,6 +1775,7 @@ app.post(
           session.id,
 
         userEmail,
+
         userName,
 
         productId,
@@ -1661,7 +1795,7 @@ app.post(
           quantityNumber,
 
         status:
-          "Processing",
+          "pending",
 
         orderDate:
           new Date(),
@@ -1674,18 +1808,21 @@ app.post(
         );
 
       await productsCollection.updateOne(
+
         {
           _id:
             new ObjectId(
               productId
             ),
         },
+
         {
           $inc: {
             stock:
               -quantityNumber,
           },
         }
+
       );
 
       res.send(result);
@@ -1695,13 +1832,16 @@ app.post(
       console.log(error);
 
       res.status(500).send({
+
         message:
           "Failed To Save Order",
+
       });
 
     }
 
-});
+  }
+);
 
 
 
@@ -1773,74 +1913,133 @@ app.get(
     // Payment related API endpoints can be added here, for example:
 
     //Stipe checkout session create API
-    app.post('/create-checkout-session', async (req, res) => {
-      try {
+  app.post("/create-checkout-session", async (req, res) => {
 
-      const paymentInfo = req.body;
+  try {
 
-      const session = await stripe.checkout.sessions.create({
+    const paymentInfo = req.body;
 
-         line_items: [
-            {
-               price_data: {
+    let lineItems = [];
 
-                  currency: 'bdt',
+    // Cart Checkout
+    if (paymentInfo.cartItems) {
 
-                  unit_amount:  paymentInfo.price * 100,
+      lineItems =
+        paymentInfo.cartItems.map((item) => ({
 
-                  product_data: {
-                     name:
-                  paymentInfo.productTitle,
-                  },
-               },
+          price_data: {
 
-               quantity:  paymentInfo.quantity,
+            currency: "bdt",
+
+            unit_amount:
+              item.price * 100,
+
+            product_data: {
+              name: item.title,
             },
-         ],
 
-         mode: 'payment',
-
-         metadata: {
-            userEmail:
-            paymentInfo.email,
-
-            userName:
-            paymentInfo.userName,
-
-          productId:
-            paymentInfo.productId,
-
-          productTitle:
-            paymentInfo.productTitle,
-
-          productImage:
-            paymentInfo.productImage,
-
-          price:
-            paymentInfo.price.toString(),
+          },
 
           quantity:
-            paymentInfo.quantity.toString(),
+            item.quantity,
+
+        }));
+
+    }
+
+    // Buy Now
+    else {
+
+      lineItems = [
+
+        {
+          price_data: {
+
+            currency: "bdt",
+
+            unit_amount:
+              paymentInfo.price * 100,
+
+            product_data: {
+              name:
+                paymentInfo.productTitle,
+            },
+
+          },
+
+          quantity:
+            paymentInfo.quantity,
 
         },
 
-         success_url: `${process.env.SITE_DOMAIN}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+      ];
 
-         cancel_url: `${process.env.SITE_DOMAIN}/payment-cancel`,
+    }
+
+    const session =
+      await stripe.checkout.sessions.create({
+
+        payment_method_types: [
+          "card",
+        ],
+
+        line_items:
+          lineItems,
+
+        mode: "payment",
+
+        metadata: {
+
+          userEmail:
+            paymentInfo.email,
+
+          userName:
+            paymentInfo.userName,
+
+          checkoutType:
+            paymentInfo.cartItems
+              ? "cart"
+              : "single",
+
+          productId:
+            paymentInfo.productId || "",
+
+          productTitle:
+            paymentInfo.productTitle || "",
+
+          productImage:
+            paymentInfo.productImage || "",
+
+          price:
+            paymentInfo.price?.toString() || "",
+
+          quantity:
+            paymentInfo.quantity?.toString() || "",
+
+        },
+
+        success_url:
+          `${process.env.SITE_DOMAIN}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+
+        cancel_url:
+          `${process.env.SITE_DOMAIN}/payment-cancel`,
+
       });
 
-      console.log(session.url);
+    res.send({
+      url: session.url,
+    });
 
-      res.send({ url: session.url });
+  } catch (error) {
 
-   } catch(error){
+    console.log(error);
 
-      console.log(error);
+    res.status(500).send({
+      error: error.message,
+    });
 
-      res.status(500).send({
-         error: error.message
-      });
-   }
+  }
+
 });
 
 
