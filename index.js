@@ -105,7 +105,7 @@ async function run() {
     const blogsCollection = db.collection('blogs');
     const cartCollection = db.collection("cart");
     const wishlistCollection = db.collection("wishlist");
-
+    const totalReviews =await reviewCollection.countDocuments();
 
 
 
@@ -261,6 +261,51 @@ app.delete(
       
 
       res.send(result);
+});
+
+app.patch(
+  "/users/ban/:id",
+  async (req, res) => {
+
+    const user =
+      await usersCollection.findOne({
+
+        _id:
+          new ObjectId(
+            req.params.id
+          ),
+
+      });
+
+    const result =
+      await usersCollection.updateOne(
+
+        {
+          _id:
+            new ObjectId(
+              req.params.id
+            ),
+        },
+
+        {
+          $set: {
+
+            isBanned:
+              !user.isBanned,
+
+            status:
+              user.status ===
+              "banned"
+                ? "active"
+                : "banned",
+
+          },
+        }
+
+      );
+
+    res.send(result);
+
 });
 
 app.get(
@@ -448,7 +493,7 @@ app.get("/statistics", async (req, res) => {
       await usersCollection.countDocuments();
 
     const orders =
-      await ordersCollection.countDocuments();
+      await orderCollection.countDocuments();
 
     res.send({
       products,
@@ -494,7 +539,6 @@ app.get("/blogs", async (req, res) => {
     const result = await blogsCollection
       .find()
       .sort({ publishDate: -1 })
-      .limit(3)
       .toArray();
 
     res.send(result);
@@ -816,13 +860,13 @@ app.get("/admin-overview", async (req, res) => {
       await usersCollection.countDocuments();
 
     const totalOrders =
-      await ordersCollection.countDocuments();
+      await orderCollection.countDocuments();
 
     const totalCategories =
       await categoriesCollection.countDocuments();
 
     const recentOrders =
-      await ordersCollection
+      await orderCollection
         .find()
         .sort({ orderDate: -1 })
         .limit(5)
@@ -1246,7 +1290,7 @@ app.delete("/orders/:id", async (req, res) => {
 app.get("/admin/reviews", async (req, res) => {
 
   const result =
-    await reviewsCollection
+    await reviewCollection
       .find()
       .sort({
         createdAt: -1
@@ -1414,20 +1458,71 @@ app.post("/wishlist", async (req, res) => {
 
 //........................review API endpoint.............................
 
-app.post("/reviews", async (req, res) => {
-  try {
-    const review = req.body;
+app.post(
+  "/reviews",
+  async (req, res) => {
 
-    const result =
-      await reviewCollection.insertOne(review);
+    try {
 
-    res.send(result);
+      const review =
+        req.body;
 
-  } catch (error) {
-    console.log(error);
-    res.status(500).send(error);
+      if (
+        !review.productId ||
+        !review.customerEmail
+      ) {
+
+        return res
+          .status(400)
+          .send({
+            message:
+              "Missing required fields",
+          });
+
+      }
+
+//       const existingReview =
+//   await reviewCollection.findOne({
+
+//     productId:
+//       review.productId,
+
+//     customerEmail:
+//       review.customerEmail,
+
+//   });
+
+// if (existingReview) {
+
+//   return res
+//     .status(400)
+//     .send({
+//       message:
+//         "You already reviewed this product",
+//     });
+
+// }
+
+      const result =
+        await reviewCollection.insertOne(
+          review
+        );
+
+      res.send(result);
+
+    } catch (error) {
+
+      console.log(error);
+
+      res.status(500).send({
+        message:
+          "Failed to submit review",
+      });
+
+    }
+
   }
-});
+);
 
 app.get("/reviews/:productId", async (req, res) => {
   try {
@@ -1447,6 +1542,58 @@ app.get("/reviews/:productId", async (req, res) => {
     console.log(error);
     res.status(500).send(error);
   }
+});
+
+app.patch(
+  "/reviews/:id",
+  async (req, res) => {
+
+    const id =
+      req.params.id;
+
+    const {
+      rating,
+      comment,
+    } = req.body;
+
+    const result =
+      await reviewCollection.updateOne(
+
+        {
+          _id:
+            new ObjectId(id)
+        },
+
+        {
+          $set: {
+            rating,
+            comment,
+          }
+        }
+
+      );
+
+    res.send(result);
+
+});
+
+app.delete(
+  "/reviews/:id",
+  async (req, res) => {
+
+    const id =
+      req.params.id;
+
+    const result =
+      await reviewCollection.deleteOne({
+
+        _id:
+          new ObjectId(id)
+
+      });
+
+    res.send(result);
+
 });
 
 app.post(
@@ -1478,6 +1625,7 @@ app.post(
 
       const {
         userEmail,
+        userName,
         productId,
         productTitle,
         productImage,
@@ -1494,6 +1642,7 @@ app.post(
           session.id,
 
         userEmail,
+        userName,
 
         productId,
 
@@ -1556,6 +1705,63 @@ app.post(
 
 
 
+app.get(
+  "/admin/profile/:email",
+  async (req, res) => {
+
+    const email = req.params.email;
+
+    const user =
+      await usersCollection.findOne({
+        email,
+      });
+
+    const totalProducts =
+      await productsCollection.countDocuments();
+
+    const totalUsers =
+      await usersCollection.countDocuments();
+
+    const totalOrders =
+      await orderCollection.countDocuments();
+
+    const totalReviews =
+      await reviewCollection.countDocuments();
+
+    const orders =
+      await orderCollection.find().toArray();
+
+    const totalRevenue = orders.reduce(
+  (sum, order) => {
+
+    const price =
+      Number(order.price) || 0;
+
+    const quantity =
+      Number(order.quantity) || 1;
+
+    const total =
+      Number(order.totalPrice) ||
+      price * quantity;
+
+    return sum + total;
+
+  },
+  0
+);
+
+    res.send({
+      user,
+      totalProducts,
+      totalUsers,
+      totalOrders,
+      totalReviews,
+      totalRevenue,
+    });
+
+  }
+);
+
 
 
 
@@ -1597,6 +1803,9 @@ app.post(
          metadata: {
             userEmail:
             paymentInfo.email,
+
+            userName:
+            paymentInfo.userName,
 
           productId:
             paymentInfo.productId,
