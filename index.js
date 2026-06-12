@@ -162,7 +162,7 @@ async function run() {
     });
 
 // ...............................API endpoint to get all users, only for admin
- app.get("/users", async (req, res) => {
+ app.get("/users",verifyFirebaseToken,verifyAdmin, async (req, res) => {
 
   const result =
     await usersCollection
@@ -189,12 +189,7 @@ app.get('/users/email/:email', async(req, res) => {
 
 
 
-app.patch(
-  '/users/admin/:id',
-  // verifyFirebaseToken,
-  // verifyAdmin,
-
-  async (req, res) => {
+app.patch('/users/admin/:id',verifyFirebaseToken,verifyAdmin,async (req, res) => {
 
     const id = req.params.id;
 
@@ -231,15 +226,7 @@ app.patch(
 );
 
 //...API endpoint to delete a user, only for admin
-app.delete(
-
-   '/users/:id',
-
-  //  verifyFirebaseToken,
-
-  //  verifyAdmin,
-
-   async(req, res) => {
+app.delete('/users/:id',verifyFirebaseToken,verifyAdmin,async(req, res) => {
 
       const id =
       req.params.id;
@@ -263,9 +250,7 @@ app.delete(
       res.send(result);
 });
 
-app.patch(
-  "/users/ban/:id",
-  async (req, res) => {
+app.patch("/users/ban/:id",verifyFirebaseToken,verifyAdmin,async (req, res) => {
 
     const user =
       await usersCollection.findOne({
@@ -308,9 +293,7 @@ app.patch(
 
 });
 
-app.get(
-  "/users/profile/:email",
-  async (req, res) => {
+app.get("/users/profile/:email",verifyFirebaseToken,async (req, res) => {
 
     const email =
       req.params.email;
@@ -324,9 +307,7 @@ app.get(
 
 });
 
-app.patch(
-  "/users/profile/:email",
-  async (req, res) => {
+app.patch("/users/profile/:email",verifyFirebaseToken,async (req, res) => {
 
     const email =
       req.params.email;
@@ -368,9 +349,7 @@ app.patch(
 
 });
 
-app.get(
-  "/profile-stats/:email",
-  async (req, res) => {
+app.get("/profile-stats/:email",verifyFirebaseToken,async (req, res) => {
 
     const email =
       req.params.email;
@@ -554,15 +533,7 @@ app.get("/blogs", async (req, res) => {
 
 //................................product detalis.............................
 
-app.get("/products/:id", async (req, res) => {
-  const id = req.params.id;
 
-  const result = await productsCollection.findOne({
-    _id: new ObjectId(id),
-  });
-
-  res.send(result);
-});
 
 
 //............................product reviews.............................
@@ -661,7 +632,7 @@ app.get("/products", async (req, res) => {
 
 //.........................dashboadrd user orders.............................
 
-app.get("/my-orders/:email", async (req, res) => {
+app.get("/my-orders/:email",verifyFirebaseToken, async (req, res) => {
 
   const email = req.params.email;
 
@@ -677,7 +648,7 @@ app.get("/my-orders/:email", async (req, res) => {
 });
 
 //............................overview user profile.............................
-app.get("/user-overview/:email", async (req, res) => {
+app.get("/user-overview/:email",verifyFirebaseToken, async (req, res) => {
 
   const email = req.params.email;
 
@@ -717,7 +688,7 @@ app.get("/user-overview/:email", async (req, res) => {
 
 //.............................wishlist API endpoints.............................
 
-app.post("/wishlist", async (req, res) => {
+app.post("/wishlist",verifyFirebaseToken, async (req, res) => {
 
   const wishlistItem = req.body;
 
@@ -749,7 +720,7 @@ app.post("/wishlist", async (req, res) => {
 
 //.......................get wishlist items.............................
 
-app.get("/wishlist/:email", async (req, res) => {
+app.get("/wishlist/:email",verifyFirebaseToken, async (req, res) => {
 
   const email =
     req.params.email;
@@ -767,7 +738,7 @@ app.get("/wishlist/:email", async (req, res) => {
 
 //......................delete wishlist item.............................
 
-app.delete("/wishlist/:id", async (req, res) => {
+app.delete("/wishlist/:id",verifyFirebaseToken, async (req, res) => {
 
   const id =
     req.params.id;
@@ -796,30 +767,10 @@ app.delete("/wishlist/:id", async (req, res) => {
 
 
 
-app.patch('/users/profile/:email', async(req, res) => {
 
-   const email = req.params.email;
-
-   const { name, photoURL } = req.body;
-
-   const result =
-   await usersCollection.updateOne(
-
-      { email },
-
-      {
-         $set: {
-            name,
-            photoURL
-         }
-      }
-   );
-
-   res.send(result);
-});
 
 //..........................my reviews API endpoints.............................
-app.get("/my-reviews/:email", async (req, res) => {
+app.get("/my-reviews/:email",verifyFirebaseToken, async (req, res) => {
 
   const email = req.params.email;
 
@@ -839,7 +790,7 @@ app.get("/my-reviews/:email", async (req, res) => {
 
 //................delete review API endpoint.............................
 
-app.delete("/reviews/:id", async (req, res) => {
+app.delete("/reviews/:id",verifyFirebaseToken, async (req, res) => {
 
   const id = req.params.id;
 
@@ -855,7 +806,7 @@ app.delete("/reviews/:id", async (req, res) => {
 
 //..........................admin dashboard API endpoints.............................
 
-app.get("/admin-overview", async (req, res) => {
+app.get("/admin-overview", verifyFirebaseToken,verifyAdmin, async (req, res) => {
   try {
 
     const totalProducts =
@@ -897,7 +848,7 @@ app.get("/admin-overview", async (req, res) => {
 });
 //..............................ad product API endpoint.............................
 
-app.post("/products", async (req, res) => {
+app.post("/products",verifyFirebaseToken,verifyAdmin, async (req, res) => {
   try {
 
     const product = req.body;
@@ -958,7 +909,7 @@ app.get("/products/:id", async (req, res) => {
 
 //.......................delete product API endpoint.............................
 
-app.delete("/products/:id", async (req, res) => {
+app.delete("/products/:id",verifyFirebaseToken,verifyAdmin, async (req, res) => {
 
   try {
 
@@ -988,7 +939,7 @@ app.delete("/products/:id", async (req, res) => {
 
 //...........................make deal API endpoint.............................
 
-app.patch("/products/deal/:id", async (req, res) => {
+app.patch("/products/deal/:id",verifyFirebaseToken,verifyAdmin, async (req, res) => {
 
   try {
 
@@ -1039,7 +990,7 @@ app.patch("/products/deal/:id", async (req, res) => {
 
 //................................remove deal API endpoint.............................
 
-app.patch("/products/remove-deal/:id", async (req, res) => {
+app.patch("/products/remove-deal/:id",verifyFirebaseToken,verifyAdmin, async (req, res) => {
 
   try {
 
@@ -1083,7 +1034,7 @@ app.patch("/products/remove-deal/:id", async (req, res) => {
 
 //.............................update product API endpoint.............................
 
-app.patch("/products/:id", async (req, res) => {
+app.patch("/products/:id", verifyFirebaseToken,verifyAdmin, async (req, res) => {
 
   try {
 
@@ -1124,7 +1075,7 @@ app.patch("/products/:id", async (req, res) => {
 });
 
 //............................admin get products API endpoint.............................
-app.get("/admin/products", async (req, res) => {
+app.get("/admin/products",verifyFirebaseToken,verifyAdmin, async (req, res) => {
 
   try {
 
@@ -1165,7 +1116,7 @@ app.get("/admin/products", async (req, res) => {
 // });
 
 //............................. Add category API endpoint.............................
-app.post("/categories", async (req, res) => {
+app.post("/categories", verifyFirebaseToken,verifyAdmin, async (req, res) => {
 
   const category =
     req.body;
@@ -1181,7 +1132,7 @@ app.post("/categories", async (req, res) => {
 
 //............................update category API endpoint.............................
 
-app.patch("/categories/:id", async (req, res) => {
+app.patch("/categories/:id", verifyFirebaseToken,verifyAdmin, async (req, res) => {
 
   const id =
     req.params.id;
@@ -1210,7 +1161,7 @@ app.patch("/categories/:id", async (req, res) => {
 
 //............................delete category API endpoint.............................
 
-app.delete("/categories/:id", async (req, res) => {
+app.delete("/categories/:id",verifyFirebaseToken,verifyAdmin, async (req, res) => {
 
   const id =
     req.params.id;
@@ -1228,7 +1179,7 @@ app.delete("/categories/:id", async (req, res) => {
 //........................get order API endpoint.............................
 
 
-app.get("/orders", async (req, res) => {
+app.get("/orders",verifyFirebaseToken,verifyAdmin, async (req, res) => {
 
   const result =
     await orderCollection
@@ -1245,7 +1196,7 @@ app.get("/orders", async (req, res) => {
 //...............................update order status API endpoint.............................
 
 
-app.patch("/orders/:id", async (req, res) => {
+app.patch("/orders/:id", verifyFirebaseToken,verifyAdmin, async (req, res) => {
 
   const id =
     req.params.id;
@@ -1275,7 +1226,7 @@ app.patch("/orders/:id", async (req, res) => {
 
 //..........................delete order API endpoint.............................
 
-app.delete("/orders/:id", async (req, res) => {
+app.delete("/orders/:id",verifyFirebaseToken,verifyAdmin, async (req, res) => {
 
   const id =
     req.params.id;
@@ -1292,7 +1243,7 @@ app.delete("/orders/:id", async (req, res) => {
 
 //.............................get all revirews API endpoint.............................
 
-app.get("/admin/reviews", async (req, res) => {
+app.get("/admin/reviews",verifyFirebaseToken,verifyAdmin, async (req, res) => {
 
   const result =
     await reviewCollection
@@ -1325,7 +1276,7 @@ app.get("/admin/reviews", async (req, res) => {
 
 //............................cart API endpoints.............................
 
-app.post("/cart", async (req, res) => {
+app.post("/cart",verifyFirebaseToken, async (req, res) => {
   try {
 
     const cartItem = req.body;
@@ -1380,7 +1331,7 @@ app.post("/cart", async (req, res) => {
 });
 //........................get cart items API endpoint.............................
 
-app.get("/cart/:email", async (req, res) => {
+app.get("/cart/:email",verifyFirebaseToken, async (req, res) => {
   try {
     const result =
       await cartCollection
@@ -1400,7 +1351,7 @@ app.get("/cart/:email", async (req, res) => {
 
 //........................delete cart item API endpoint.............................
 
-app.delete("/cart/:id", async (req, res) => {
+app.delete("/cart/:id",verifyFirebaseToken, async (req, res) => {
   const result =
     await cartCollection.deleteOne({
       _id: new ObjectId(req.params.id),
@@ -1411,7 +1362,7 @@ app.delete("/cart/:id", async (req, res) => {
 
 //.......................increment cart item quantity API endpoint.............................
 
-app.patch("/cart/increase/:id", async (req, res) => {
+app.patch("/cart/increase/:id",verifyFirebaseToken, async (req, res) => {
   const id = req.params.id;
 
   const result = await cartCollection.updateOne(
@@ -1430,7 +1381,7 @@ app.patch("/cart/increase/:id", async (req, res) => {
 
 //.......................decrement cart item quantity API endpoint.............................
 
-app.patch("/cart/decrease/:id", async (req, res) => {
+app.patch("/cart/decrease/:id",verifyFirebaseToken, async (req, res) => {
   const id = req.params.id;
 
   const item =
@@ -1460,36 +1411,34 @@ app.patch("/cart/decrease/:id", async (req, res) => {
 
 //.........................post wishlist API endpoint.............................
 
-app.post("/wishlist", async (req, res) => {
+// app.post("/wishlist",verifyFirebaseToken, async (req, res) => {
 
-  const wishlistItem = req.body;
+//   const wishlistItem = req.body;
 
-  const exists =
-    await wishlistCollection.findOne({
-      userEmail: wishlistItem.userEmail,
-      productId: wishlistItem.productId,
-    });
+//   const exists =
+//     await wishlistCollection.findOne({
+//       userEmail: wishlistItem.userEmail,
+//       productId: wishlistItem.productId,
+//     });
 
-  if (exists) {
-    return res.send({
-      inserted: false,
-      message: "Already Added",
-    });
-  }
+//   if (exists) {
+//     return res.send({
+//       inserted: false,
+//       message: "Already Added",
+//     });
+//   }
 
-  const result =
-    await wishlistCollection.insertOne(
-      wishlistItem
-    );
+//   const result =
+//     await wishlistCollection.insertOne(
+//       wishlistItem
+//     );
 
-  res.send(result);
-});
+//   res.send(result);
+// });
 
 //........................review API endpoint.............................
 
-app.post(
-  "/reviews",
-  async (req, res) => {
+app.post("/reviews",verifyFirebaseToken, async (req, res) => {
 
     try {
 
@@ -1573,9 +1522,7 @@ app.get("/reviews/:productId", async (req, res) => {
   }
 });
 
-app.patch(
-  "/reviews/:id",
-  async (req, res) => {
+app.patch("/reviews/:id",verifyFirebaseToken,async (req, res) => {
 
     const id =
       req.params.id;
@@ -1606,8 +1553,7 @@ app.patch(
 
 });
 
-app.delete(
-  "/reviews/:id",
+app.delete("/reviews/:id",verifyFirebaseToken,
   async (req, res) => {
 
     const id =
@@ -1625,9 +1571,7 @@ app.delete(
 
 });
 
-app.post(
-  "/save-order/:sessionId",
-  async (req, res) => {
+app.post("/save-order/:sessionId",verifyFirebaseToken,async (req, res) => {
 
     try {
 
@@ -1845,9 +1789,7 @@ app.post(
 
 
 
-app.get(
-  "/admin/profile/:email",
-  async (req, res) => {
+app.get("/admin/profile/:email",verifyFirebaseToken,verifyAdmin,async (req, res) => {
 
     const email = req.params.email;
 
@@ -1913,7 +1855,7 @@ app.get(
     // Payment related API endpoints can be added here, for example:
 
     //Stipe checkout session create API
-  app.post("/create-checkout-session", async (req, res) => {
+  app.post("/create-checkout-session", verifyFirebaseToken, async (req, res) => {
 
   try {
 
