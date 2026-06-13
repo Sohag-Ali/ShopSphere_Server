@@ -2008,7 +2008,7 @@ run().catch(console.dir);
 
 
 app.get('/', (req, res) => {
-  res.send('Life Spark is Running!')
+  res.send('ShopEase API is running')
 })
 
 app.listen(port, () => {
