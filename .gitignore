@@ -1,5 +1,5 @@
 node_modules
-.env
 
 .vercel
 shopsphere-project-firebase-adminsdk.json
+config.bat
